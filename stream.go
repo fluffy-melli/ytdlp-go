@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-func Stream(url string, option *Options, do func([]byte)) error {
+func Stream(url string, option *Options, callback func([]byte), bufferSize int) error {
 	var args []string
 	if option != nil {
 		args = append(option.ToArgs(), "-o", "-", url)
@@ -23,11 +23,11 @@ func Stream(url string, option *Options, do func([]byte)) error {
 		return fmt.Errorf("failed to start yt-dlp: %w", err)
 	}
 
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, bufferSize)
 	for {
 		n, err := stdout.Read(buf)
 		if n > 0 {
-			do(buf[:n])
+			callback(buf[:n])
 		}
 		if err == io.EOF {
 			break
@@ -40,6 +40,22 @@ func Stream(url string, option *Options, do func([]byte)) error {
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("yt-dlp error: %w", err)
 	}
+
+	return nil
+}
+
+func Run(url string, option *Options, callback func([]byte)) error {
+	var buffer []byte
+
+	err := Stream(url, option, func(chunk []byte) {
+		buffer = append(buffer, chunk...)
+	}, 4096)
+
+	if err != nil {
+		return err
+	}
+
+	callback(buffer)
 
 	return nil
 }
